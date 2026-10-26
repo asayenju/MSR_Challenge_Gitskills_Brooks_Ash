@@ -31,7 +31,7 @@ def rivals(i):
 seeds=[i for i in np.argsort(-st) if st[i]>=20 and not bad(i)]
 nA=0;topics=[]
 for i in seeds:
-    if nA>=6: break
+    if nA>=12: break
     if i in used: continue
     r=rivals(i)
     if len(r)>=3:
@@ -42,7 +42,7 @@ for i in seeds:
 # B: same-repo siblings
 nB=0
 for i in seeds:
-    if nB>=6: break
+    if nB>=12: break
     if i in used: continue
     r=[];sn=[i]
     for k in range(sim.shape[1]):
@@ -53,10 +53,10 @@ for i in seeds:
         take([i]+r[:3],f'B{nB+1}','same_pack_siblings'); nB+=1
 # C: template families (same repo, shared 3-word description prefix, many members)
 df['pre']=[' '.join(re.findall(r'[a-z]+',d.lower())[:3]) for d in ds]
-cnt=df.groupby(['repo_full_name','pre']).size().reset_index(name='n').query('n>=8').sort_values('n',ascending=False)
+cnt=df.groupby(['repo_full_name','pre']).size().reset_index(name='n').query('n>=5').sort_values('n',ascending=False)
 nC=0
 for _,row in cnt.iterrows():
-    if nC>=3: break
+    if nC>=6: break
     if len(row.pre.split())<3 or row.pre.startswith('use this'): continue
     m=df[(df.repo_full_name==row.repo_full_name)&(df.pre==row.pre)].index.tolist()
     m=[x for x in m if x not in used and not bad(x)][:4]
@@ -64,7 +64,7 @@ for _,row in cnt.iterrows():
 # D: fork variants (same name, different repos, sim>=0.6)
 nD=0
 for i in seeds:
-    if nD>=3: break
+    if nD>=6: break
     if i in used: continue
     r=[];seenr={repo[i]}
     for k in range(sim.shape[1]):
@@ -74,18 +74,18 @@ for i in seeds:
     if len(r)>=3: take([i]+r[:3],f'D{nD+1}','fork_variants'); nD+=1
 # E: isolated random controls
 rng=np.random.default_rng(1)
-iso=[i for i in rng.permutation(len(df)) if sim[i,0]<0.12 and not bad(i) and i not in used and len(ds[i])>=80]
+iso=[i for i in rng.permutation(len(df)) if sim[i,0]<0.18 and not bad(i) and i not in used and len(ds[i])>=80]
 pool=[];rs=set()
 for i in iso:
     if repo[i] in rs: continue
     pool.append(i);rs.add(repo[i])
-    if len(pool)==28: break
-for g in range(7): take(pool[g*4:g*4+4],f'E{g+1}','isolated_control')
+    if len(pool)==56: break
+for g in range(14): take(pool[g*4:g*4+4],f'E{g+1}','isolated_control')
 rows=[]
 for g in out:
     for i in g['members']:
         rows.append(dict(group=g['group'],type=g['type'],idx=i,repo=repo[i],path=df.path[i],name=nm[i],stars=int(st[i]),license=df.license[i],description=ds[i],file_sha=df.file_sha[i]))
-sel=pd.DataFrame(rows); sel.to_parquet('data/selected100.parquet'); sel.to_csv('data/selected100.csv',index=False)
+sel=pd.DataFrame(rows); sel.to_parquet('data/selected200.parquet'); sel.to_csv('data/selected200.csv',index=False)
 print(sel.groupby('type').size())
 for g,d in sel.groupby('group',sort=False):
     print(f"\n== {g} {d.type.iloc[0]}")
