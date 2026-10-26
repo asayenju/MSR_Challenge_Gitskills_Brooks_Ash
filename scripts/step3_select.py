@@ -14,7 +14,14 @@ def samename(i,j):
     if not a or not b: return False
     return len(a&b)/len(a|b)>=0.5 or a<=b or b<=a
 startswith_use_when=lambda d: False
-bad=lambda i: bool(re.search(r'cluster[-_ ]?\d|cli-anything|^skill$|test',nm[i].lower())) or len(ds[i])<60 or 'symbols across' in ds[i] or 'fixture' in ds[i].lower() or startswith_use_when(ds[i])
+# v2 exclusions from hand review (see docs/s0-review.md)
+# repos whose v1 clusters were weak: B2 library-keyed, B9 unrelated, C2 API-keyed, C3 unrelated
+EXCLUDE_REPOS={'skilld-dev/vue-ecosystem-skills','ScotterMonk/AgentAutoFlow','oguzhan18/angular-ecosystem-skills','skylarsabo/code-ops'}
+# meta-skills that can load on any request, which would corrupt the isolated baseline
+EXCLUDE_NAMES={'find-skills','skill-tree-root'}
+# generic names that overlap each other; excluded from group E only
+GENERIC_NAMES={'coding','qa','verification','audit','research','debug','review'}
+bad=lambda i: bool(re.search(r'cluster[-_ ]?\d|cli-anything|^skill$|test',nm[i].lower())) or len(ds[i])<60 or 'symbols across' in ds[i] or 'fixture' in ds[i].lower() or startswith_use_when(ds[i]) or repo[i] in EXCLUDE_REPOS or nm[i].lower() in EXCLUDE_NAMES
 used=set(); out=[]
 def take(group,gid,label):
     for i in group: used.add(i)
@@ -74,7 +81,7 @@ for i in seeds:
     if len(r)>=3: take([i]+r[:3],f'D{nD+1}','fork_variants'); nD+=1
 # E: isolated random controls
 rng=np.random.default_rng(1)
-iso=[i for i in rng.permutation(len(df)) if sim[i,0]<0.18 and not bad(i) and i not in used and len(ds[i])>=80]
+iso=[i for i in rng.permutation(len(df)) if sim[i,0]<0.18 and not bad(i) and i not in used and len(ds[i])>=80 and nm[i].lower() not in GENERIC_NAMES]
 pool=[];rs=set()
 for i in iso:
     if repo[i] in rs: continue

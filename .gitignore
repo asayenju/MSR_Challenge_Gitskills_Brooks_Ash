@@ -1,0 +1,6 @@
+# regenerable pipeline intermediates (scripts/step1-3)
+data/skills_clean.parquet
+data/sample100k.parquet
+data/nbr.npy
+data/sim.npy
+data/selected200.parquet
