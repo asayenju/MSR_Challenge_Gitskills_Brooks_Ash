@@ -52,6 +52,15 @@ The 100 skills come from 73 repos.
 - Cross-repo similarity only matters if the skills are installed together, so confusion tests need controlled skill sets.
 - 24 of the 100 skills have no license listed. Check `repos.license` before redistributing text.
 
+### Reproducing
+
+- `data/selected100.csv`: the 100 selected skills (group, repo, path, name, stars, license, description, file_sha).
+- `scripts/step1_filter.py <out.parquet>`: stream-filter usable skills from the Hugging Face parquet.
+- `scripts/step2_neighbors.py`: sample 100K and compute TF-IDF neighbours.
+- `scripts/step3_select.py`: build the five groups and write the selection.
+
+The scripts read and write under `data/` relative to the working directory and need `duckdb`, `pandas`, `pyarrow` and `scikit-learn`. Step 1 writes `skills_clean.parquet`, which step 2 expects at `data/skills_clean.parquet`. Descriptions in the CSV come from public repositories and stay under each repo's license.
+
 ## Next steps
 
 1. Hand-review the 100 skills and swap out weak clusters.
