@@ -4,3 +4,4 @@ data/sample100k.parquet
 data/nbr.npy
 data/sim.npy
 data/selected200.parquet
+.env
