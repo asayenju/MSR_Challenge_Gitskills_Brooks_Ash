@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MODEL = os.environ.get("OPENCODE_MODEL", "opencode/deepseek-v4.1-flash-free")
+TIMEOUT = 300
 BODY = "Stub skill for an evaluation. Reply with the single line 'done' and do nothing else.\n"
 
 group, n, out = sys.argv[1], int(sys.argv[2]), sys.argv[3]
@@ -38,7 +39,7 @@ def run(job):
         data = tempfile.mkdtemp(prefix="oc_data_")
         try:
             pr = subprocess.run(["opencode", "run", "-m", MODEL, "--format", "json", t["request"]],
-                                capture_output=True, text=True, timeout=300, stdin=subprocess.DEVNULL, cwd=d,
+                                capture_output=True, text=True, timeout=TIMEOUT, stdin=subprocess.DEVNULL, cwd=d,
                                 env={**os.environ, "PWD": str(d), "XDG_DATA_HOME": data})
             chosen, err_ev = [], ""
             for line in pr.stdout.splitlines():

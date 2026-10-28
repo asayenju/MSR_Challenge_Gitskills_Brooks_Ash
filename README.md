@@ -29,7 +29,7 @@ Metrics are reported per skill group (below), so the effect of similarity can be
 
 ## Phase 1: grouping similar skills
 
-Phase 1 finds skills that are textually similar and organizes a **200-skill** pilot set into groups by *type of confusion*. It is a feasibility pilot. Nothing here has been run on an agent yet, and the selection has not been hand-validated.
+Phase 1 finds skills that are textually similar and organizes a **200-skill** pilot set into groups by *type of confusion*. It is a feasibility pilot. The selection has not been hand-validated. The first agent runs are in Phase 2 below.
 
 ### Pipeline
 
@@ -81,12 +81,56 @@ The 200 skills come from 146 repos.
 - `scripts/step1_filter.py <out.parquet>`: stream-filter usable skills from the Hugging Face parquet.
 - `scripts/step2_neighbors.py`: sample 100K and compute TF-IDF neighbours.
 - `scripts/step3_select.py`: build the five groups and write the selection.
+- `scripts/run_opencode.py GROUP N OUT.csv`: run a group's golden requests on opencode (set `OPENCODE_MODEL`, and `OPENROUTER_API_KEY` for OpenRouter models). `notebooks/run_opencode.ipynb` is the same runner in a notebook.
+- `scripts/metrics.py RESULTS.csv`: pass@k and pass^k from a results file.
+- `results/A_qwen.csv`, `B_qwen.csv`, `C_qwen.csv`: per-trial results.
 
 The scripts read and write under `data/` relative to the working directory and need `duckdb`, `pandas`, `pyarrow` and `scikit-learn`. Step 1 writes `skills_clean.parquet`, which step 2 expects at `data/skills_clean.parquet`. Descriptions in the CSV come from public repositories and stay under each repo's license.
 
+## Phase 2: first agent runs (groups A, B, C)
+
+**These are pilot numbers, not findings.** The golden requests are unvalidated drafts written by one model (Claude), and each result comes from one cheap model run once per setting.
+
+### Setup
+
+- **Agent:** [opencode](https://opencode.ai) with `qwen3-coder-next` (via OpenRouter, paid) on groups A, B and C. Codex was the planned agent (see `results/codex_spike.md`), but the account hit its usage limit, which resets on Nov 24, 2026. A Claude agent was ruled out because Claude drafted the requests.
+- **Install:** for each cluster, its 4 skills are written to `.opencode/skills/<name>/SKILL.md` in a fresh git repo, with the real name and description and a stub body.
+- **Trials:** 3 per request (48 requests per group, 144 trials per group and model).
+- **Scoring:** the first `skill` tool call in opencode's event stream is the chosen skill. A trial is `correct` (gold or acceptable skill), `wrong` (another skill), `no_skill` (the agent never loaded a skill) or `error` (timeout or crash; counted as a failure).
+
+### Results
+
+| Group | Model | pass@1 | pass@3 | pass^3 | Correct | No skill | Wrong | Error |
+|---|---|---|---|---|---|---|---|---|
+| A. Cross-repo rivals | Qwen3 Coder Next | 0.479 | 0.667 | 0.292 | 69 | 65 | 7 | 3 |
+| B. Same-pack siblings | Qwen3 Coder Next | 0.514 | 0.708 | 0.312 | 74 | 66 | 3 | 1 |
+| C. Template families | Qwen3 Coder Next | 0.417 | 0.604 | 0.271 | 60 | 77 | 2 | 5 |
+
+### Reading the results
+
+- **Most failures are skipped skills, not confusion.** `no_skill` is 45-53% of Qwen trials, while wrong picks are 1-5%. When Qwen does load a skill it is right 91% (A), 96% (B) and 97% (C) of the time. Other models may skip less, so this needs a second model to confirm.
+- **The pass@k / pass^k gap is mostly skipping too.** The same request is sometimes handled with a skill and sometimes without, so pass@3 is 0.60-0.71 and pass^3 only 0.27-0.31. Under the README's reading, a wide gap signals confusion, but here it mostly reflects an agent that does not reliably reach for a skill.
+
+### Why, by group
+
+These are hypotheses from the numbers, not tested explanations.
+
+- **A. Cross-repo rivals.** 7 wrong picks, concentrated in a few pairs: `query-stringdb` → `lifesciences-proteomics` (3 times), `ssl-certs` → `ssl-certificate-checker` (2), and `data-ai-post-training-expert` → `fine-tuning-expert` (1). In each pair the chosen skill covers the same job under a broader or near-identical name, which is the intended rival effect. Cluster results are uneven: A12 was 12/12, A8 and A10 were 10/12, and A7 (2/12) and A9 (1/12) were mostly skipped. Skipping is probably highest where the model can answer from its own knowledge (for example biology or general ML questions) without a skill.
+- **B. Same-pack siblings.** The fewest wrong picks (3) and the highest pass@1 of the three. Siblings from one repo have distinct jobs, so choosing between them is easy once the agent loads one. The wrong picks are `integration-ruby` → `integration-python` (2), which differ only by language, and one `hoyeon-browser-work` → `chrome-browser`. Cluster results swing widely: B8 was 12/12 while B7 was 0/12, all skipped. I have not looked at why B7 is skipped, so that cluster should be checked by hand.
+- **C. Template families.** The lowest pass@1 and the most skipped trials (77 of 144). All four skills in a cluster open with the same "This skill should be used when the user asks to ..." boilerplate, so the description gives little to match on, and the golden requests are paraphrased, not the trigger phrases. Only 2 trials were wrong, both to the generic `fret-repo-orientation`, which behaves like a catch-all. Five errors are all timeouts, 4 in cluster C2.
+
+### Caveats
+
+- `no_skill` means the agent never called the skill tool. It may still have answered well from its own knowledge, but it counts as a fail here.
+- Skill bodies are stubs ("reply done"), so the agent has little reason to load a skill once it has read its description. This may inflate skipping.
+- Results vary between runs. Re-running 12 requests changed 2 outcomes (both from `no_skill` to `correct`).
+- Errors are counted as failures, so pass@k is slightly low for groups with many timeouts.
+- Groups D and E have not been run, so there is no baseline error rate yet.
+
 ## Next steps
 
-1. Hand-review the 200 skills and swap out weak clusters.
-2. Spike: run `codex exec --json` on a few toy skills to confirm which skill Codex loaded can be read from its output. Codex is used as the agent under test to avoid bias from developing the pipeline with Claude.
-3. Write a golden set (user request, correct skill, acceptable alternatives) per cluster, drafted by more than one model and spot-checked by a human.
-4. Run Codex n times per task, compute pass@k and pass^k per group, and use an LLM judge only for borderline items.
+1. Hand-review the golden requests per group (`docs/golden-review/`) and swap out weak clusters, then rerun.
+2. Run groups D (fork-variant control) and E (isolated controls) for a baseline.
+3. Rerun on Codex once the usage limit resets, and on a second non-Claude model, so the result does not depend on one agent.
+4. Test whether non-stub skill bodies, or asking the agent to name the skill it would use, change the skipping rate.
+5. Reduce cost per run (the Qwen runs cost roughly $0.6-0.7 per 144 trials).
